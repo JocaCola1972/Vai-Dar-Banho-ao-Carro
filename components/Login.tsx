@@ -4,7 +4,8 @@ import { ICONS, THEME } from '../constants';
 import { Rocket, Sparkles } from 'lucide-react';
 
 interface LoginProps {
-  onLogin: (email: string, pass: string) => boolean;
+  // Fix: Updated onLogin to return a Promise<boolean> to match the async handleLogin in App.tsx
+  onLogin: (email: string, pass: string) => Promise<boolean>;
   loginImageUrl: string | null;
 }
 
@@ -13,9 +14,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, loginImageUrl }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fix: Updated handleSubmit to be async so it can await the result of onLogin
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!onLogin(email, password)) {
+    const success = await onLogin(email, password);
+    if (!success) {
       setError(true);
     }
   };
@@ -36,7 +39,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, loginImageUrl }) => {
           <div className="w-20 h-20 bg-gradient-to-br from-cyan-400 to-violet-500 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-cyan-500/20">
             <Rocket size={38} className="text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">CloudClean</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white mb-2 text-center">Vai dar banho ao carro</h1>
           <div className="flex items-center space-x-2 bg-white/5 px-3 py-1 rounded-full border border-white/5">
             <Sparkles size={12} className="text-cyan-400" />
             <p className="text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em]">Ready for Liftoff</p>

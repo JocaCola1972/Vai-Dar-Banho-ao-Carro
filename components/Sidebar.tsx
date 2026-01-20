@@ -18,8 +18,8 @@ const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
             <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <Cloud size={20} className="text-white" />
             </div>
-            <span className="font-extrabold tracking-tight text-xl bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-              CloudClean
+            <span className="font-extrabold tracking-tight text-base bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 leading-tight">
+              Vai dar banho<br/>ao carro
             </span>
           </div>
           

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User, Registration, AppSettings, Car } from '../types';
 import { getWeekId, getMonthId, isThursdayRegistrationOpen } from '../utils';
-// Added Activity to the imports
+import { supabase } from '../supabase';
 import { Car as CarIcon, User as UserIcon, LogOut, ShieldCheck, AlertTriangle, Key, Plus, Trash2, Rocket, Cloud, MapPin, Sparkles, CheckCircle2, Activity } from 'lucide-react';
 import { THEME } from '../constants';
 
@@ -21,6 +21,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'home' | 'profile'>('home');
   const [selectedCarId, setSelectedCarId] = useState('');
   const [parkingSpot, setParkingSpot] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentWeek = getWeekId();
   const currentMonth = getMonthId();
@@ -32,23 +33,60 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   const isAutoOpen = isThursdayRegistrationOpen();
   const isOpen = isManualOpen || isAutoOpen;
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCarId) return alert('Targeting failed: Select a car.');
     if (isRegisteredThisMonth) return;
     if (isFull) return;
 
-    const newReg: Registration = {
-      id: Math.random().toString(36).substr(2, 9),
-      userId: user.id,
-      carId: selectedCarId,
-      weekId: currentWeek,
-      monthId: currentMonth,
-      timestamp: new Date().toISOString(),
-      parkingSpot
+    setIsSubmitting(true);
+    const newReg = {
+      user_id: user.id,
+      car_id: selectedCarId,
+      week_id: currentWeek,
+      month_id: currentMonth,
+      parking_spot: parkingSpot,
+      timestamp: new Date().toISOString()
     };
 
-    setRegistrations(prev => [...prev, newReg]);
+    const { data, error } = await supabase.from('registrations').insert([newReg]).select();
+
+    if (!error && data) {
+      // Mapping back to our local type if necessary
+      const savedReg: Registration = {
+        id: data[0].id,
+        userId: data[0].user_id,
+        carId: data[0].car_id,
+        weekId: data[0].week_id,
+        monthId: data[0].month_id,
+        timestamp: data[0].timestamp,
+        parkingSpot: data[0].parking_spot
+      };
+      setRegistrations(prev => [...prev, savedReg]);
+    } else {
+      alert('Erro ao comunicar com a base de dados: ' + error.message);
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleAddCar = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const newCar: Car = {
+      id: Math.random().toString(36).substr(2, 9),
+      make: formData.get('make') as string,
+      model: formData.get('model') as string,
+      plate: formData.get('plate') as string,
+    };
+    
+    const updatedCars = [...user.cars, newCar];
+    updateProfile({ ...user, cars: updatedCars });
+    e.currentTarget.reset();
+  };
+
+  const removeCar = (carId: string) => {
+    const updatedCars = user.cars.filter(c => c.id !== carId);
+    updateProfile({ ...user, cars: updatedCars });
   };
 
   const renderRegistrationMessage = () => {
@@ -66,10 +104,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <p className="text-cyan-400 font-bold text-xs uppercase tracking-[0.3em]">Sequence Confirmed</p>
           </div>
           <p className="text-slate-300 text-sm leading-relaxed max-w-md mx-auto">
-            You are scheduled for a deep clean this week with your <span className="text-white font-bold">{car?.plate}</span>.
+            You are scheduled for a deep clean this week with your <span className="text-white font-bold">{car?.plate || 'Unit Registered'}</span>.
             <br /><br />
             <span className="text-[11px] font-black text-slate-500 uppercase block mb-2">Protocol Checklist:</span>
-            Drop your keys at reception on your wash day and make sure the hardware is in its assigned spot.
+            Deixe a chave do seu carro na receção no dia da lavagem e indique onde o estacionou.
           </p>
           <div className="inline-flex items-center space-x-3 p-4 glass rounded-2xl border border-white/10">
             <MapPin size={16} className="text-violet-400" />
@@ -90,7 +128,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <p className="text-slate-500 font-bold text-xs uppercase tracking-[0.3em]">1 Cycle Per Month</p>
           </div>
           <p className="text-slate-400 text-sm leading-relaxed max-w-xs mx-auto">
-            Your monthly clean quota has been fulfilled. The system will reset for you in the next calendar month.
+            Já beneficiou da sua lavagem mensal. Por favor, aguarde o próximo mês para um novo ciclo.
           </p>
         </div>
       );
@@ -107,7 +145,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <p className="text-amber-500 font-bold text-xs uppercase tracking-[0.3em]">Traffic Jam Detected</p>
           </div>
           <p className="text-slate-400 text-sm leading-relaxed max-w-xs mx-auto">
-            We've reached peak bandwidth for this week. Keep your engines tuned for next week's window!
+            Não conseguiu um lugar nesta semana, mas poderá tentar na semana seguinte. A capacidade máxima foi atingida.
           </p>
         </div>
       );
@@ -124,7 +162,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <p className="text-slate-500 font-bold text-xs uppercase tracking-[0.3em]">Awaiting Thursday Sync</p>
           </div>
           <p className="text-slate-400 text-sm leading-relaxed max-w-xs mx-auto">
-            Registrations initialize every Thursday at 08:00 AM. Set your alarms for the next sync!
+            As inscrições abrem todas as quintas-feiras às 08:00 AM.
           </p>
         </div>
       );
@@ -144,7 +182,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
         
         {user.cars.length === 0 ? (
           <div className="text-center p-10 glass rounded-3xl border border-dashed border-white/10">
-            <p className="text-slate-400 text-sm mb-6">Your hardware profile is missing a car unit.</p>
+            <p className="text-slate-400 text-sm mb-6">O seu perfil não tem nenhuma viatura registada.</p>
             <button 
               onClick={() => setActiveTab('profile')}
               className={`${THEME.button} px-8 py-3`}
@@ -156,24 +194,24 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
           <form onSubmit={handleRegister} className="space-y-6">
             <div className="space-y-4">
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-2 ml-1 tracking-widest">Target Hardware</label>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-2 ml-1 tracking-widest">Viatura a Lavar</label>
                 <select 
                   value={selectedCarId}
                   onChange={(e) => setSelectedCarId(e.target.value)}
                   required
                   className="w-full bg-slate-900 border border-white/10 p-4 rounded-2xl text-sm text-white outline-none focus:border-cyan-400"
                 >
-                  <option value="">Select your car...</option>
+                  <option value="">Selecione o carro...</option>
                   {user.cars.map(c => (
                     <option key={c.id} value={c.id}>{c.make} {c.model} • {c.plate}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-2 ml-1 tracking-widest">Docking Coordinates (Parking Spot)</label>
+                <label className="block text-[11px] font-bold uppercase text-slate-500 mb-2 ml-1 tracking-widest">Local de Estacionamento</label>
                 <input 
                   type="text" 
-                  placeholder="e.g. Level B2, Spot 44"
+                  placeholder="ex: Piso -1, Lugar 24"
                   value={parkingSpot}
                   onChange={(e) => setParkingSpot(e.target.value)}
                   required
@@ -183,45 +221,15 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             </div>
             <button 
               type="submit"
-              className={`w-full ${THEME.button} py-5 text-sm uppercase tracking-[0.2em] shadow-lg shadow-cyan-500/20`}
+              disabled={isSubmitting}
+              className={`w-full ${THEME.button} py-5 text-sm uppercase tracking-[0.2em] shadow-lg shadow-cyan-500/20 disabled:opacity-50`}
             >
-              Execute Protocol
+              {isSubmitting ? 'Processing...' : 'Confirmar Inscrição'}
             </button>
           </form>
         )}
       </div>
     );
-  };
-
-  const handleProfileSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const updatedUser: User = {
-      ...user,
-      firstName: formData.get('firstName') as string,
-      lastName: formData.get('lastName') as string,
-      phone: formData.get('phone') as string,
-      password: (formData.get('password') as string) || user.password
-    };
-    updateProfile(updatedUser);
-    alert('Interface settings updated!');
-  };
-
-  const handleAddCar = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const newCar: Car = {
-      id: Math.random().toString(36).substr(2, 9),
-      make: formData.get('make') as string,
-      model: formData.get('model') as string,
-      plate: formData.get('plate') as string,
-    };
-    updateProfile({ ...user, cars: [...user.cars, newCar] });
-    e.currentTarget.reset();
-  };
-
-  const removeCar = (carId: string) => {
-    updateProfile({ ...user, cars: user.cars.filter(c => c.id !== carId) });
   };
 
   return (
@@ -265,7 +273,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                     <span className="text-white font-mono">{registrations.filter(r => r.weekId === currentWeek).length} / {settings.weeklyCapacity}</span>
                   </div>
                   <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all duration-1000" style={{ width: `${(registrations.filter(r => r.weekId === currentWeek).length / settings.weeklyCapacity) * 100}%` }}></div>
+                    <div className="h-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all duration-1000" style={{ width: `${Math.min(100, (registrations.filter(r => r.weekId === currentWeek).length / settings.weeklyCapacity) * 100)}%` }}></div>
                   </div>
                 </div>
                 
@@ -286,10 +294,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                 </div>
               </div>
             </div>
-            
-            <div className="glass p-8 rounded-[2.5rem] border border-white/5 bg-gradient-to-br from-violet-500/10 to-transparent">
-              <p className="text-[11px] font-bold text-slate-300 italic">"Cleaning your cloud infrastructure, one car at a time."</p>
-            </div>
           </div>
         </div>
       )}
@@ -303,7 +307,18 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               </div>
               <h2 className="text-2xl font-black text-white tracking-tight">Personnel Bio</h2>
             </div>
-            <form onSubmit={handleProfileSubmit} className="space-y-6">
+            <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const updatedUser: User = {
+                  ...user,
+                  firstName: formData.get('firstName') as string,
+                  lastName: formData.get('lastName') as string,
+                  phone: formData.get('phone') as string,
+                  password: (formData.get('password') as string) || user.password
+                };
+                updateProfile(updatedUser);
+            }} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-500 uppercase ml-1">First Name</label>
@@ -321,7 +336,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Override Passcode</label>
                 <input name="password" type="password" placeholder="••••••••" className="bg-white/5 border border-white/10 p-4 text-sm rounded-2xl w-full focus:border-violet-400 outline-none" />
-                <p className="text-[10px] text-slate-600 ml-1 italic">Leave blank to maintain current signal encryption.</p>
               </div>
               <button type="submit" className={`w-full ${THEME.button} py-4 text-xs tracking-[0.2em] uppercase`}>Commit Settings</button>
             </form>
@@ -336,7 +350,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             </div>
             
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-              {user.cars.length === 0 && <p className="text-slate-500 text-sm italic py-4">No units registered to your signature.</p>}
+              {user.cars.length === 0 && <p className="text-slate-500 text-sm italic py-4">Nenhuma viatura registada.</p>}
               {user.cars.map(car => (
                 <div key={car.id} className="group flex items-center justify-between p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-cyan-400/30 transition-all">
                   <div className="flex items-center space-x-4">
@@ -358,9 +372,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <form onSubmit={handleAddCar} className="pt-8 border-t border-white/5 space-y-4">
               <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Register New Unit</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <input name="make" placeholder="Make" required className="bg-white/5 border border-white/10 p-3 text-xs rounded-xl outline-none focus:border-cyan-400" />
-                <input name="model" placeholder="Model" required className="bg-white/5 border border-white/10 p-3 text-xs rounded-xl outline-none focus:border-cyan-400" />
-                <input name="plate" placeholder="Plate" required className="bg-white/5 border border-white/10 p-3 text-xs rounded-xl outline-none focus:border-cyan-400" />
+                <input name="make" placeholder="Marca" required className="bg-white/5 border border-white/10 p-3 text-xs rounded-xl outline-none focus:border-cyan-400" />
+                <input name="model" placeholder="Modelo" required className="bg-white/5 border border-white/10 p-3 text-xs rounded-xl outline-none focus:border-cyan-400" />
+                <input name="plate" placeholder="Matrícula" required className="bg-white/5 border border-white/10 p-3 text-xs rounded-xl outline-none focus:border-cyan-400" />
               </div>
               <button type="submit" className="w-full bg-slate-800 text-white font-black py-4 text-xs tracking-[0.2em] uppercase hover:bg-slate-700 rounded-2xl transition-all flex items-center justify-center">
                 <Plus size={16} className="mr-2" /> Sync New Hardware

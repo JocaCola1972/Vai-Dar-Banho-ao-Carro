@@ -1,5 +1,5 @@
 {
-  "name": "cloudclean---corporate-car-wash-manager",
+  "name": "vai-dar-banho-ao-carro---corporate-car-wash-manager",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,7 +11,8 @@
   "dependencies": {
     "lucide-react": "^0.562.0",
     "react-dom": "^19.2.3",
-    "react": "^19.2.3"
+    "react": "^19.2.3",
+    "@supabase/supabase-js": "^2.90.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
