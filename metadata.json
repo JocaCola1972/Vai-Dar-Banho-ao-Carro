@@ -1,0 +1,7 @@
+{
+  "name": "CloudClean - Corporate Car Wash Manager",
+  "description": "A high-tech, cyber-security themed car wash management system for corporate environments with weekly registration limits and monthly frequency controls.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
