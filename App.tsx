@@ -63,6 +63,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
+      
+      // Tentar recuperar sessão local primeiro
+      const savedUser = localStorage.getItem('app_user_session');
+      if (savedUser) {
+        setAuth({ user: JSON.parse(savedUser), isAuthenticated: true });
+      }
+
       await fetchData();
       setLoading(false);
     };
@@ -71,9 +78,11 @@ const App: React.FC = () => {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        if (profile) setAuth({ user: mapProfile(profile), isAuthenticated: true });
-      } else {
-        setAuth({ user: null, isAuthenticated: false });
+        if (profile) {
+          const u = mapProfile(profile);
+          setAuth({ user: u, isAuthenticated: true });
+          localStorage.setItem('app_user_session', JSON.stringify(u));
+        }
       }
     });
 
@@ -81,26 +90,38 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = async (email: string, pass: string) => {
-    // Para simplificar no protótipo, verificamos primeiro na tabela profiles
-    const userInDb = users.find(u => u.email === email && u.password === pass);
+    // 1. Verificar na tabela customizada profiles (para passwords simples como '123')
+    const userInDb = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === pass);
     if (userInDb) {
       setAuth({ user: userInDb, isAuthenticated: true });
+      localStorage.setItem('app_user_session', JSON.stringify(userInDb));
       return true;
     }
-    // Fallback para Supabase Auth real se as contas já existirem
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    return !error;
+    
+    // 2. Fallback para Supabase Auth real
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (!error && data.user) {
+       const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+       if (profile) {
+         const u = mapProfile(profile);
+         setAuth({ user: u, isAuthenticated: true });
+         localStorage.setItem('app_user_session', JSON.stringify(u));
+         return true;
+       }
+    }
+    return false;
   };
 
   const handleLogout = () => {
     setAuth({ user: null, isAuthenticated: false });
+    localStorage.removeItem('app_user_session');
     supabase.auth.signOut();
   };
 
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#050a14] text-cyan-400 font-mono">
       <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="text-[10px] tracking-[0.5em] uppercase">Booting System...</p>
+      <p className="text-[10px] tracking-[0.5em] uppercase animate-pulse">Establishing Secure Uplink...</p>
     </div>
   );
 
@@ -134,6 +155,7 @@ const App: React.FC = () => {
               }).eq('id', u.id);
               if (!error) {
                 setAuth(prev => ({ ...prev, user: u }));
+                localStorage.setItem('app_user_session', JSON.stringify(u));
                 fetchData();
               }
             }}
